@@ -124,7 +124,12 @@ struct ChatView: View {
     @StateObject private var volumeObserver = VolumeObserver()
     @StateObject private var speechRecognizer = SpeechRecognizer()
     
-    // ★ ダブルクリック検知のための新しい変数
+    // ★ 1. 通信マネージャーを呼び出す
+    @StateObject private var connectionManager = ConnectionManager()
+    
+    // ★ 2. 通信がONかOFFかを記憶するスイッチ変数
+    @State private var isNetworking: Bool = false
+    
     @State private var clickCount: Int = 0
     @State private var clickTask: Task<Void, Never>?
     
@@ -141,6 +146,25 @@ struct ChatView: View {
                         .pickerStyle(MenuPickerStyle()).tint(.green).background(Color.green.opacity(0.1)).cornerRadius(8)
                     }
                     Spacer()
+                    
+                    // ★ 3. 新規追加：通信ON/OFFアンテナボタン
+                    Button(action: {
+                        isNetworking.toggle()
+                        if isNetworking {
+                            connectionManager.startNetworking() // 通信オン
+                            AudioServicesPlaySystemSound(1110) // 起動音
+                        } else {
+                            connectionManager.stopNetworking() // 通信オフ
+                            AudioServicesPlaySystemSound(1111) // 終了音
+                        }
+                    }) {
+                        Image(systemName: isNetworking ? "antenna.radiowaves.left.and.right" : "antenna.radiowaves.left.and.right.slash")
+                            .padding(10)
+                            .background(isNetworking ? Color.green.opacity(0.2) : Color.gray.opacity(0.2))
+                            .cornerRadius(20)
+                            .foregroundColor(isNetworking ? .green : .gray)
+                    }
+                    
                     Button(action: { isPocketMode = true }) {
                         Image(systemName: "lock.fill").padding(10).background(Color.gray.opacity(0.2)).cornerRadius(20).foregroundColor(.primary)
                     }
@@ -181,7 +205,6 @@ struct ChatView: View {
                             .onSubmit { if !inputText.isEmpty { sendMessage(text: inputText); inputText = "" } }
                     }
                     
-                    // ★ ボタンを押した時の動作を handleActionPress に変更
                     Button(action: { handleActionPress() }) {
                         HStack {
                             Image(systemName: speechRecognizer.isRecording ? "stop.fill" : "mic.fill")
@@ -190,7 +213,6 @@ struct ChatView: View {
                     }
                 }.padding().background(Color(UIColor.systemGray6))
             }
-            // ★ リモコンを押した時の動作も handleActionPress に変更
             .onChange(of: volumeObserver.volume) { _, _ in handleActionPress() }
             .sheet(isPresented: $showingSettings) { ProfileSettingsView() }
             
@@ -199,32 +221,30 @@ struct ChatView: View {
     }
     
     // ==========================================
-    // ★ スマート・クリック検知システム（0.3秒の魔法）
+    // スマート・クリック検知システム（0.3秒の魔法）
     // ==========================================
     func handleActionPress() {
         clickCount += 1
-        clickTask?.cancel() // 前のタイマーをキャンセル
+        clickTask?.cancel()
         
         clickTask = Task {
             do {
-                try await Task.sleep(nanoseconds: 300_000_000) // 0.3秒間だけ待つ
-                if Task.isCancelled { return } // キャンセルされたら何もしない
+                try await Task.sleep(nanoseconds: 300_000_000)
+                if Task.isCancelled { return }
                 
                 let currentClicks = clickCount
-                clickCount = 0 // 回数をリセット
+                clickCount = 0
                 
                 await MainActor.run {
                     if currentClicks == 1 {
-                        // 【シングルクリックの処理】
                         if speechRecognizer.isRecording {
-                            finishAndSend() // 録音中なら完了＆送信
+                            finishAndSend()
                         } else {
-                            startRecording() // 待機中なら録音開始
+                            startRecording()
                         }
                     } else if currentClicks >= 2 {
-                        // 【ダブルクリックの処理】
                         if speechRecognizer.isRecording {
-                            cancelRecording() // 録音中ならボイクリ（キャンセル）
+                            cancelRecording()
                         } else {
                             print("待機中のダブルクリック（将来の機能用）")
                         }
@@ -234,10 +254,8 @@ struct ChatView: View {
         }
     }
     
-    // ーーー 個別の動作関数 ーーー
-    
     func startRecording() {
-        AudioServicesPlaySystemSound(1113) // ピッ♪
+        AudioServicesPlaySystemSound(1113)
         let actualLanguage = (myLanguage == "system") ? Locale.current.identifier : myLanguage
         speechRecognizer.startTranscribing(language: actualLanguage)
     }
@@ -246,13 +264,12 @@ struct ChatView: View {
         speechRecognizer.stopTranscribing()
         let finalTranscript = speechRecognizer.transcript
         
-        // 念のため音声で「ボイクリ」と言った場合もキャンセルする
         if finalTranscript.contains("ボイクリ") {
             cancelRecording()
             return
         }
         
-        AudioServicesPlaySystemSound(1052) // ピピッ♪
+        AudioServicesPlaySystemSound(1052)
         if !finalTranscript.isEmpty {
             sendMessage(text: finalTranscript)
         }
@@ -261,14 +278,13 @@ struct ChatView: View {
     
     func cancelRecording() {
         speechRecognizer.stopTranscribing()
-        AudioServicesPlaySystemSound(1053) // キャンセル音
+        AudioServicesPlaySystemSound(1053)
         
-        // Siriにシステムガイドとして「ボイクリしました」と喋らせる
         let utterance = AVSpeechUtterance(string: "ボイクリしました")
-        utterance.voice = AVSpeechSynthesisVoice(language: "ja-JP") // ガイド音声なので常に日本語
+        utterance.voice = AVSpeechSynthesisVoice(language: "ja-JP")
         synthesizer.speak(utterance)
         
-        speechRecognizer.transcript = "" // テキストを破棄
+        speechRecognizer.transcript = ""
     }
     
     func sendMessage(text: String) {
@@ -284,7 +300,6 @@ struct ChatView: View {
         messages.append(newMessage)
     }
     
-    // ポケットモード表示部分
     var pocketOverlay: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -327,22 +342,19 @@ struct SentMessageRow: View {
     let synthesizer: AVSpeechSynthesizer
     @State private var translationConfig: TranslationSession.Configuration?
     
-    // 設定画面からデータを読み込む
     @AppStorage("myGender") var myGender: String = "female"
-    @AppStorage("secondName") var secondName: String = "" // ★ 第2ネームを読み込む
+    @AppStorage("secondName") var secondName: String = ""
     
     var body: some View {
         HStack {
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 
-                // ★ 1. 吹き出しの上に自分の名前（第2ネーム）を表示
                 Text(secondName)
                     .font(.caption2)
                     .foregroundColor(.gray)
                     .padding(.trailing, 4)
                 
-                // 原文
                 Text(message.originalText)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -360,18 +372,12 @@ struct SentMessageRow: View {
                         .padding(12)
                         .background(Color.green.opacity(0.2))
                         .cornerRadius(12)
-                        // ★ 2. 長押しでコピーできるメニューを追加
                         .contextMenu {
-                            Button(action: {
-                                UIPasteboard.general.string = message.originalText
-                            }) {
+                            Button(action: { UIPasteboard.general.string = message.originalText }) {
                                 Text("原文をコピー")
                                 Image(systemName: "doc.on.doc")
                             }
-                            
-                            Button(action: {
-                                UIPasteboard.general.string = message.translatedText
-                            }) {
+                            Button(action: { UIPasteboard.general.string = message.translatedText }) {
                                 Text("翻訳をコピー")
                                 Image(systemName: "doc.on.doc.fill")
                             }
