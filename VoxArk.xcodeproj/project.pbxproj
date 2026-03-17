@@ -10,9 +10,22 @@
 		7E74B1D32F64EE9B00C06FFD /* VoxArk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VoxArk.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CEB7C0F32F692BD200FC1919 /* Exceptions for "VoxArk" folder in "VoxArk" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7E74B1D22F64EE9B00C06FFD /* VoxArk */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7E74B1D52F64EE9B00C06FFD /* VoxArk */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CEB7C0F32F692BD200FC1919 /* Exceptions for "VoxArk" folder in "VoxArk" target */,
+			);
 			path = VoxArk;
 			sourceTree = "<group>";
 		};
@@ -254,8 +267,10 @@
 				DEVELOPMENT_TEAM = 9Q964PP8LB;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "英語の録音と発音チェックのために使用します。";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "あなたの発音を解析して文字にするために使用します。";
+				INFOPLIST_FILE = VoxArk/Info.plist;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "近くのユーザーと通信するためにローカルネットワークを使用します。";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "音声入力（トランシーバー機能）のためにマイクを使用します。";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "あなたの声をテキストに変換するために、Appleの音声認識エンジンを使用します。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -288,8 +303,10 @@
 				DEVELOPMENT_TEAM = 9Q964PP8LB;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "英語の録音と発音チェックのために使用します。";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "あなたの発音を解析して文字にするために使用します。";
+				INFOPLIST_FILE = VoxArk/Info.plist;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "近くのユーザーと通信するためにローカルネットワークを使用します。";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "音声入力（トランシーバー機能）のためにマイクを使用します。";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "あなたの声をテキストに変換するために、Appleの音声認識エンジンを使用します。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
