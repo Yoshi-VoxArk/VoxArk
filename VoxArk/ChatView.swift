@@ -53,6 +53,12 @@ class SpeechRecognizer: ObservableObject {
         guard let request = request else { return }
         request.shouldReportPartialResults = true
         
+        // ★ これを追加：AIに文脈を深く推測させ、句読点を自動で打たせる（iOS 16以降）
+        if #available(iOS 16.0, *) {
+            request.addsPunctuation = true
+        }
+
+        
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         inputNode.removeTap(onBus: 0)
@@ -86,14 +92,17 @@ class SpeechRecognizer: ObservableObject {
 }
 
 // ==========================================
-// 3. メッセージデータの構造体
+// 3. メッセージデータの構造体（★相手からの受信にも対応）
 // ==========================================
-struct SentMessage: Identifiable {
+struct ChatMessage: Identifiable {
     let id = UUID()
     let originalText: String
     var translatedText: String
     var isTranslating: Bool
     var targetLanguage: String
+    var isMine: Bool           // ★ 自分か相手か
+    var senderName: String     // ★ 誰が送ったか
+    var senderGender: String   // ★ 相手の性別
 }
 
 // ==========================================
@@ -101,10 +110,11 @@ struct SentMessage: Identifiable {
 // ==========================================
 struct ChatView: View {
     @State private var inputText: String = ""
-    @State private var messages: [SentMessage] = []
+    @State private var messages: [ChatMessage] = []
     
     @AppStorage("myLanguage") var myLanguage: String = "system"
     @AppStorage("secondName") var secondName: String = ""
+    @AppStorage("myGender") var myGender: String = "female"
     
     @State private var targetLanguage: String = "en-US"
     @State private var showingSettings = false
@@ -123,13 +133,9 @@ struct ChatView: View {
     private let synthesizer = AVSpeechSynthesizer()
     @StateObject private var volumeObserver = VolumeObserver()
     @StateObject private var speechRecognizer = SpeechRecognizer()
-    
-    // ★ 1. 通信マネージャーを呼び出す
     @StateObject private var connectionManager = ConnectionManager()
     
-    // ★ 2. 通信がONかOFFかを記憶するスイッチ変数
     @State private var isNetworking: Bool = false
-    
     @State private var clickCount: Int = 0
     @State private var clickTask: Task<Void, Never>?
     
@@ -146,16 +152,14 @@ struct ChatView: View {
                         .pickerStyle(MenuPickerStyle()).tint(.green).background(Color.green.opacity(0.1)).cornerRadius(8)
                     }
                     Spacer()
-                    
-                    // ★ 3. 新規追加：通信ON/OFFアンテナボタン
                     Button(action: {
                         isNetworking.toggle()
                         if isNetworking {
-                            connectionManager.startNetworking() // 通信オン
-                            AudioServicesPlaySystemSound(1110) // 起動音
+                            connectionManager.startNetworking()
+                            AudioServicesPlaySystemSound(1110)
                         } else {
-                            connectionManager.stopNetworking() // 通信オフ
-                            AudioServicesPlaySystemSound(1111) // 終了音
+                            connectionManager.stopNetworking()
+                            AudioServicesPlaySystemSound(1111)
                         }
                     }) {
                         Image(systemName: isNetworking ? "antenna.radiowaves.left.and.right" : "antenna.radiowaves.left.and.right.slash")
@@ -178,7 +182,7 @@ struct ChatView: View {
                     ScrollView {
                         VStack(spacing: 24) {
                             ForEach($messages) { $message in
-                                SentMessageRow(message: $message, synthesizer: synthesizer).id(message.id)
+                                ChatMessageRow(message: $message, synthesizer: synthesizer).id(message.id)
                             }
                         }.padding()
                     }
@@ -214,6 +218,12 @@ struct ChatView: View {
                 }.padding().background(Color(UIColor.systemGray6))
             }
             .onChange(of: volumeObserver.volume) { _, _ in handleActionPress() }
+            // ★ 新規追加：相手からメッセージとメタデータを受信した時の処理
+            .onChange(of: connectionManager.receivedPayload?.id) { _, _ in
+                if let payload = connectionManager.receivedPayload {
+                    receiveMessage(payload)
+                }
+            }
             .sheet(isPresented: $showingSettings) { ProfileSettingsView() }
             
             if isPocketMode { pocketOverlay }
@@ -221,7 +231,7 @@ struct ChatView: View {
     }
     
     // ==========================================
-    // スマート・クリック検知システム（0.3秒の魔法）
+    // アクション・関数群
     // ==========================================
     func handleActionPress() {
         clickCount += 1
@@ -246,7 +256,7 @@ struct ChatView: View {
                         if speechRecognizer.isRecording {
                             cancelRecording()
                         } else {
-                            print("待機中のダブルクリック（将来の機能用）")
+                            print("待機中のダブルクリック")
                         }
                     }
                 }
@@ -264,40 +274,54 @@ struct ChatView: View {
         speechRecognizer.stopTranscribing()
         let finalTranscript = speechRecognizer.transcript
         
-        if finalTranscript.contains("ボイクリ") {
-            cancelRecording()
-            return
-        }
+        if finalTranscript.contains("ボイクリ") { cancelRecording(); return }
         
         AudioServicesPlaySystemSound(1052)
-        if !finalTranscript.isEmpty {
-            sendMessage(text: finalTranscript)
-        }
+        if !finalTranscript.isEmpty { sendMessage(text: finalTranscript) }
         speechRecognizer.transcript = ""
     }
     
     func cancelRecording() {
         speechRecognizer.stopTranscribing()
         AudioServicesPlaySystemSound(1053)
-        
         let utterance = AVSpeechUtterance(string: "ボイクリしました")
         utterance.voice = AVSpeechSynthesisVoice(language: "ja-JP")
         synthesizer.speak(utterance)
-        
         speechRecognizer.transcript = ""
     }
     
+    // ★ 自分が送信する時（メタデータも一緒に相手へ送る）
     func sendMessage(text: String) {
         let actualMyLanguage = (myLanguage == "system") ? Locale.current.identifier : myLanguage
         let isSameLanguage = (actualMyLanguage.prefix(2) == targetLanguage.prefix(2))
         
-        let newMessage = SentMessage(
-            originalText: text,
-            translatedText: isSameLanguage ? text : "翻訳中...",
-            isTranslating: !isSameLanguage,
-            targetLanguage: targetLanguage
+        // 1. 自分の画面に表示
+        let newMessage = ChatMessage(
+            originalText: text, translatedText: isSameLanguage ? text : "翻訳中...",
+            isTranslating: !isSameLanguage, targetLanguage: targetLanguage,
+            isMine: true, senderName: secondName, senderGender: myGender
         )
         messages.append(newMessage)
+        
+        // 2. 相手にテキストとメタデータを送信
+        connectionManager.sendMessage(text: text, myName: secondName, myGender: myGender, myLanguage: actualMyLanguage)
+    }
+    
+    // ★ 相手から受信した時（メタデータを受け取って表示）
+    func receiveMessage(_ payload: ChatPayload) {
+        let actualMyLanguage = (myLanguage == "system") ? Locale.current.identifier : myLanguage
+        let isSameLanguage = (actualMyLanguage.prefix(2) == payload.senderLanguage.prefix(2))
+        
+        let incomingMessage = ChatMessage(
+            originalText: payload.text,
+            translatedText: isSameLanguage ? payload.text : "翻訳中...",
+            isTranslating: !isSameLanguage,
+            targetLanguage: actualMyLanguage, // 自分の言語に翻訳する
+            isMine: false,
+            senderName: payload.senderName, // ★ 相手の名前
+            senderGender: payload.senderGender // ★ 相手の性別
+        )
+        messages.append(incomingMessage)
     }
     
     var pocketOverlay: some View {
@@ -336,54 +360,62 @@ struct ChatView: View {
     }
 }
 
-// ーーー メッセージの吹き出し ーーー
-struct SentMessageRow: View {
-    @Binding var message: SentMessage
+// ==========================================
+// 5. 吹き出しUI（★自分と相手で左右に振り分け）
+// ==========================================
+struct ChatMessageRow: View {
+    @Binding var message: ChatMessage
     let synthesizer: AVSpeechSynthesizer
     @State private var translationConfig: TranslationSession.Configuration?
     
-    @AppStorage("myGender") var myGender: String = "female"
-    @AppStorage("secondName") var secondName: String = ""
-    
     var body: some View {
         HStack {
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                
-                Text(secondName)
+            if message.isMine { Spacer() } // 自分なら右寄せ
+            
+            VStack(alignment: message.isMine ? .trailing : .leading, spacing: 4) {
+                // 名前表示
+                Text(message.senderName)
                     .font(.caption2)
                     .foregroundColor(.gray)
-                    .padding(.trailing, 4)
+                    .padding(message.isMine ? .trailing : .leading, 4)
                 
+                // 原文
                 Text(message.originalText)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 4)
                 
                 HStack(alignment: .bottom, spacing: 10) {
-                    if !message.isTranslating {
+                    if !message.isMine && !message.isTranslating {
+                        // 相手のメッセージ用：再生ボタンを左に
+                        Button(action: { speak(text: message.translatedText, language: message.targetLanguage) }) {
+                            Image(systemName: "speaker.wave.2.circle.fill").resizable().frame(width: 24, height: 24).foregroundColor(.blue)
+                        }.padding(.bottom, 4)
+                    }
+                    
+                    // 翻訳テキストの吹き出し
+                    Text(message.translatedText)
+                        .font(.body)
+                        .padding(12)
+                        .background(message.isMine ? Color.green.opacity(0.2) : Color.blue.opacity(0.2))
+                        .cornerRadius(12)
+                        .contextMenu {
+                            Button(action: { UIPasteboard.general.string = message.originalText }) { Text("原文をコピー"); Image(systemName: "doc.on.doc") }
+                            Button(action: { UIPasteboard.general.string = message.translatedText }) { Text("翻訳をコピー"); Image(systemName: "doc.on.doc.fill") }
+                        }
+                    
+                    if message.isMine && !message.isTranslating {
+                        // 自分のメッセージ用：再生ボタンを右に
                         Button(action: { speak(text: message.translatedText, language: message.targetLanguage) }) {
                             Image(systemName: "speaker.wave.2.circle.fill").resizable().frame(width: 24, height: 24).foregroundColor(.green)
                         }.padding(.bottom, 4)
                     }
-                    
-                    Text(message.translatedText)
-                        .font(.body)
-                        .padding(12)
-                        .background(Color.green.opacity(0.2))
-                        .cornerRadius(12)
-                        .contextMenu {
-                            Button(action: { UIPasteboard.general.string = message.originalText }) {
-                                Text("原文をコピー")
-                                Image(systemName: "doc.on.doc")
-                            }
-                            Button(action: { UIPasteboard.general.string = message.translatedText }) {
-                                Text("翻訳をコピー")
-                                Image(systemName: "doc.on.doc.fill")
-                            }
-                        }
                 }
-            }.padding(.leading, 50)
+            }
+            .padding(.leading, message.isMine ? 50 : 0)
+            .padding(.trailing, message.isMine ? 0 : 50)
+            
+            if !message.isMine { Spacer() } // 相手なら左寄せ
         }
         .onAppear {
             if message.isTranslating {
@@ -402,19 +434,17 @@ struct SentMessageRow: View {
                     speak(text: response.targetText, language: message.targetLanguage)
                 }
             } catch {
-                DispatchQueue.main.async {
-                    message.translatedText = "翻訳エラー"
-                    message.isTranslating = false
-                }
+                DispatchQueue.main.async { message.translatedText = "翻訳エラー"; message.isTranslating = false }
             }
         }
     }
     
+    // ★ 送信者のジェンダー（メタデータ）を使ってSiriの声を決定
     func speak(text: String, language: String) {
         let utterance = AVSpeechUtterance(string: text)
         let allVoices = AVSpeechSynthesisVoice.speechVoices()
         
-        let targetGender: AVSpeechSynthesisVoiceGender = (myGender == "male") ? .male : .female
+        let targetGender: AVSpeechSynthesisVoiceGender = (message.senderGender == "male") ? .male : .female
         
         if let premiumVoice = allVoices.first(where: { $0.language == language && $0.gender == targetGender && $0.quality == .premium }) {
             utterance.voice = premiumVoice
@@ -425,7 +455,6 @@ struct SentMessageRow: View {
         } else {
             utterance.voice = AVSpeechSynthesisVoice(language: language)
         }
-        
         synthesizer.speak(utterance)
     }
 }
