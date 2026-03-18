@@ -11,7 +11,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		CEB7C0F32F692BD200FC1919 /* Exceptions for "VoxArk" folder in "VoxArk" target */ = {
+		CE65E6762F6EC9C200023B08 /* Exceptions for "VoxArk" folder in "VoxArk" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -24,7 +24,7 @@
 		7E74B1D52F64EE9B00C06FFD /* VoxArk */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				CEB7C0F32F692BD200FC1919 /* Exceptions for "VoxArk" folder in "VoxArk" target */,
+				CE65E6762F6EC9C200023B08 /* Exceptions for "VoxArk" folder in "VoxArk" target */,
 			);
 			path = VoxArk;
 			sourceTree = "<group>";
@@ -268,6 +268,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VoxArk/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "QRコードをスキャンするためにカメラを使用します";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "近くのユーザーと通信するためにローカルネットワークを使用します。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "音声入力（トランシーバー機能）のためにマイクを使用します。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "あなたの声をテキストに変換するために、Appleの音声認識エンジンを使用します。";
@@ -304,6 +305,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VoxArk/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "QRコードをスキャンするためにカメラを使用します";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "近くのユーザーと通信するためにローカルネットワークを使用します。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "音声入力（トランシーバー機能）のためにマイクを使用します。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "あなたの声をテキストに変換するために、Appleの音声認識エンジンを使用します。";
